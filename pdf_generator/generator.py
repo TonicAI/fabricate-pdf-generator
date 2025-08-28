@@ -86,12 +86,22 @@ class PDFGenerator:
         # Parse file size target
         target_kb = FileSizeInflator.parse_file_size(data.get('file_size'), row_index)
         
-        # Prepare display data (exclude metadata)
-        display_data = {k: v for k, v in data.items() if k != 'file_size'}
+        # Extract filename if present
+        custom_filename = data.get('file_name')
+        
+        # Prepare display data (exclude metadata columns)
+        display_data = {k: v for k, v in data.items() if k not in ['file_size', 'file_name']}
         
         # Generate filename
-        first_value = list(display_data.values())[0] if display_data else row_index
-        filename = f"form_{first_value}_{row_index}.pdf"
+        if custom_filename:
+            # Use custom filename, ensuring it's safe and has .pdf extension
+            filename = self._sanitize_filename(str(custom_filename).strip())
+            if not filename.lower().endswith('.pdf'):
+                filename += '.pdf'
+        else:
+            # Use default naming scheme
+            filename = f"{row_index}.pdf"
+        
         output_path = self.output_dir / filename
         
         # Generate PDF
@@ -105,6 +115,33 @@ class PDFGenerator:
             FileSizeInflator.check_target_accuracy(str(output_path), target_kb, filename)
         
         return str(output_path)
+    
+    def _sanitize_filename(self, filename: str) -> str:
+        """Sanitize filename to be safe for filesystem use"""
+        import re
+        
+        # Remove any path components (prevent directory traversal)
+        filename = os.path.basename(filename)
+        
+        # Replace invalid characters with underscores
+        # Keep alphanumeric, spaces, hyphens, underscores, and dots
+        filename = re.sub(r'[^\w\s\-_.]', '_', filename)
+        
+        # Replace multiple consecutive spaces/underscores with single underscore
+        filename = re.sub(r'[\s_]+', '_', filename)
+        
+        # Remove leading/trailing underscores and dots
+        filename = filename.strip('_.')
+        
+        # Ensure filename isn't empty
+        if not filename:
+            filename = "document"
+        
+        # Limit length to prevent filesystem issues
+        if len(filename) > 200:
+            filename = filename[:200]
+        
+        return filename
     
     def _generate_direct_pdf(self, data: Dict[str, Any], output_path: str, target_kb: Optional[int]):
         """Generate PDF directly from data"""

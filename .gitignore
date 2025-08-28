@@ -168,6 +168,9 @@ pdfs/
 test_*/
 *_output/
 
+# Fabricate generated databases
+fabricate/
+
 # Database files (test data)
 *.sqlite
 *.sqlite3

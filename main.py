@@ -24,9 +24,6 @@ Examples:
   
   # Generate with image mode and custom title
   python %(prog)s -w MyWorkspace -d ecommerce -t orders -o ./pdfs --image --title "Order Forms"
-  
-  # Generate specific entity and keep database
-  python %(prog)s --workspace Default --database ecommerce --table orders --output ./pdfs --entity Orders --keep-database
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -46,12 +43,7 @@ Examples:
                        help="Generate image-based PDFs (simulates scanned documents)")
     parser.add_argument("--title",
                        help="Custom title for the forms (default: table name with proper formatting)")
-    parser.add_argument("--entity", "-e",
-                       help="Generate only a specific table/entity from Fabricate")
-    parser.add_argument("--keep-database", action="store_true",
-                       help="Keep generated Fabricate database after PDF generation")
-    parser.add_argument("--database-output-dir",
-                       help="Directory to save generated Fabricate database (default: temporary)")
+
     
     parser.add_argument("--version", action="version", version="PDF Generator 1.0.0")
     
@@ -71,8 +63,6 @@ Examples:
         # Generate the database
         db_path = fabricate_manager.generate_database(
             database_name=args.database,
-            output_dir=args.database_output_dir,
-            entity=args.entity,
             on_progress=progress_callback
         )
         
@@ -93,8 +83,8 @@ Examples:
         sys.exit(1)
         
     finally:
-        # Cleanup Fabricate database if not keeping it
-        if fabricate_manager and not args.keep_database:
+        # Cleanup Fabricate database
+        if fabricate_manager:
             fabricate_manager.cleanup_temp_database()
 
 

@@ -1,11 +1,47 @@
 # PDF Generator for Load Testing
 
-A Python application that generates PDFs from Fabricate database rows, with optional image conversion to simulate scanned documents.
+A Python application that generates PDFs from Fabricate database rows, with optional image conversion to simulate scanned documents. Perfect for load testing scenarios that require realistic PDF files with customizable sizes.
 
 ## Installation
 
+### Prerequisites
+
+- Python 3.8+
+- Virtual environment (recommended)
+
+### Setup
+
+1. Create and activate a virtual environment:
+
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+2. Install dependencies:
+
 ```bash
 pip install -r requirements.txt
+```
+
+## Quick Start
+
+1. **Set up Fabricate credentials**:
+
+```bash
+export FABRICATE_API_KEY="your-api-key-here"
+```
+
+2. **Generate your first PDFs**:
+
+```bash
+python main.py --workspace Default --database ecommerce --table customers --output ./my_pdfs
+```
+
+3. **Check the results**:
+
+```bash
+ls -la ./my_pdfs/
 ```
 
 ## Usage
@@ -29,17 +65,17 @@ python main.py --workspace Default --database ecommerce --table customers --outp
 python main.py --workspace Default --database ecommerce --table customers --output ./output_pdfs --title "Customer Registration Form"
 ```
 
-### Advanced Options
+### Advanced Examples
 
 ```bash
-# Custom workspace
-python main.py --workspace MyWorkspace --database ecommerce --table orders --output ./output_pdfs
+# Custom workspace with specific entity
+python main.py --workspace MyWorkspace --database ecommerce --table orders --output ./output_pdfs --entity Orders
 
 # Keep the generated database for reuse
 python main.py -w Default -d ecommerce -t customers -o ./output_pdfs --keep-database --database-output-dir ./databases
 
-# Generate only a specific entity/table
-python main.py -w Default -d ecommerce -t customers -o ./output_pdfs --entity Customers
+# Generate image-based PDFs with custom settings
+python main.py -w Default -d ecommerce -t products -o ./output_pdfs --image --title "Product Catalog"
 ```
 
 ## CLI Options
@@ -56,72 +92,84 @@ python main.py -w Default -d ecommerce -t customers -o ./output_pdfs --entity Cu
 - `--image`: Generate image-based PDFs simulating scanned documents
 - `--title`: Custom title for the forms (default: table name with proper formatting)
 
-### Advanced Options
+## Environment Variables
 
-- `--entity, -e`: Generate only a specific table/entity from Fabricate
-- `--keep-database`: Keep generated Fabricate database after PDF generation
-- `--database-output-dir`: Directory to save generated Fabricate database (default: temporary)
+The PDF generator uses the Fabricate service to dynamically generate SQLite databases for testing. You need to configure your API credentials:
 
-## Fabricate Configuration
-
-When using Fabricate database generation, you need to configure your API credentials:
-
-### Environment Variables
-
-The Fabricate client automatically uses these environment variables:
+Set these environment variables before running the application:
 
 - `FABRICATE_API_KEY`: Your Fabricate API key (required)
-- `FABRICATE_API_URL`: The Fabricate API URL (optional, defaults to https://fabricate.tonic.ai/api/v1)
-
-### Setup
-
-```bash
-# Set your API key
-export FABRICATE_API_KEY="your-api-key-here"
-
-# Optional: Set custom API URL
-export FABRICATE_API_URL="https://your-fabricate-instance.com/api/v1"
-```
-
-### Example Script
-
-See `example_fabricate.py` for a complete example of using the Fabricate integration programmatically.
+- `FABRICATE_API_URL`: The Fabricate API URL (optional, only set if you are using a self-hosted Fabricate instance)
 
 ## Features
 
 - **Fabricate Integration**: Generate SQLite databases on-demand using Fabricate
-- **Form-like Layout**: Creates professional-looking forms from database data
-- **Image Mode**: Generates high-quality images, then embeds them in PDFs to simulate scanned documents
-- **File Size Inflation**: Automatically inflates PDFs to match `file_size` column values (in KB) for load testing
-- **Smart Title Generation**: Uses table name by default, customizable with `--title`
-- **Automatic Naming**: PDFs are named using the first column value and row index
-- **Modular Architecture**: Clean, readable code with separated concerns
-- **Progress Tracking**: Real-time progress updates during Fabricate database generation
-- **Error Handling**: Robust error handling for database and file operations
-- **Flexible**: Works with any SQLite table structure
+- **Dual Generation Modes**:
+  - **Direct PDF**: Clean text-based forms
+  - **Image Mode**: High-quality image generation → PDF embedding (simulates scanned documents)
+- **Flexible PDF Naming**:
+  - Uses `file_name` column if present in database
+  - Falls back to `{row_index}.pdf`
+  - Automatic filename sanitization for filesystem compatibility
+- **Dynamic Titles**: Uses table name by default, customizable with `--title`
 
 ## Output
 
-- **PDF Mode**: Generates clean, text-based PDF forms
+- **PDF Mode**: Generates clean, text-based PDF forms with professional layout
 - **Image Mode**: Generates PDFs containing embedded images (simulating scanned documents)
 - **File Size Control**: Automatically inflates files to match database `file_size` column (in KB)
-- Files are named: `form_{first_column_value}_{row_index}.pdf`
+- **Smart Naming**:
+  - Uses `file_name` column if present in database
+  - Falls back to `{row_index}.pdf`
+  - Automatically sanitizes filenames for filesystem compatibility
 
-## Example Database Structure
+## Database Integration
 
-The application works with any SQLite table. Example:
+### Supported Structures
+
+The application works with **any SQLite table structure**. Data is automatically formatted into professional forms regardless of the table schema.
+
+### Example Database Structure
 
 ```sql
-CREATE TABLE users (
+CREATE TABLE customers (
     id INTEGER PRIMARY KEY,
-    name TEXT,
+    first_name TEXT,
+    last_name TEXT,
     email TEXT,
     phone TEXT,
-    address TEXT
+    address TEXT,
+    city TEXT,
+    state TEXT,
+    zip_code TEXT,
+    file_size INTEGER,        -- Special: Controls PDF file size in KB
+    file_name TEXT           -- Special: Custom filename for PDF
 );
 ```
 
-Each row will generate a separate PDF with all columns formatted as a form.
+### Special Control Columns
+
+The generator recognizes special columns that control PDF generation behavior:
+
+| Column      | Type    | Purpose                | Notes                                                          |
+| ----------- | ------- | ---------------------- | -------------------------------------------------------------- |
+| `file_size` | INTEGER | Target file size in KB | Used for load testing; automatically inflates PDF to this size |
+| `file_name` | TEXT    | Custom PDF filename    | Auto-sanitized for filesystem safety; must end with `.pdf`     |
+
+**Important**: Special columns are excluded from PDF content - they control generation only.
+
+### Sample Data
+
+```sql
+INSERT INTO customers VALUES (
+    1, 'John', 'Doe', 'john.doe@email.com', '555-1234',
+    '123 Main St', 'Anytown', 'CA', '12345',
+    150,                     -- Generate 150KB PDF
+    'customer_john_doe.pdf'  -- Custom filename
+);
+```
+
+This will generate a PDF named `customer_john_doe.pdf` with a target size of 150KB containing a form with all the customer data (excluding the control columns).
 
 ## Project Structure
 
@@ -143,12 +191,22 @@ pdf-generator/
 
 ### Architecture
 
-The codebase follows a modular architecture with clear separation of concerns:
+The codebase follows a clean, modular architecture with clear separation of concerns:
 
-- **StyleManager**: Handles all PDF styling and paragraph styles
-- **ContentGenerator**: Creates form layouts and manages PDF content
-- **ImageGenerator**: Generates PIL images for scanned document simulation
-- **FileSizeInflator**: Manages file size inflation for load testing
-- **DatabaseManager**: Handles SQLite database operations
-- **FabricateManager**: Integrates with Fabricate for dynamic database generation
-- **PDFGenerator**: Main orchestrator that coordinates all components
+| Component            | Purpose               | Key Features                                               |
+| -------------------- | --------------------- | ---------------------------------------------------------- |
+| **PDFGenerator**     | Main orchestrator     | Coordinates all components, manages workflow               |
+| **FabricateManager** | Fabricate integration | API calls, database generation, cleanup                    |
+| **DatabaseManager**  | SQLite operations     | Query execution, table validation, column detection        |
+| **StyleManager**     | PDF styling           | Custom paragraph styles, layout configuration              |
+| **ContentGenerator** | Form layout           | Content creation, padding for file size inflation          |
+| **ImageGenerator**   | Image processing      | PIL image generation, PDF embedding for scanned simulation |
+| **FileSizeInflator** | File size control     | Binary padding, size target validation                     |
+
+### Design Principles
+
+- **Single Responsibility**: Each class has a focused, well-defined purpose
+- **Dependency Injection**: Components receive their dependencies, enabling easy testing
+- **Error Handling**: Comprehensive exception handling with clear error messages
+- **Resource Management**: Proper cleanup of temporary files and database connections
+- **Configuration**: Environment-based configuration for Fabricate integration

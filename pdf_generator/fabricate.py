@@ -10,11 +10,7 @@ import tempfile
 from pathlib import Path
 from typing import Optional, Dict, Any, Callable
 
-try:
-    from fabricate_client import generate
-    FABRICATE_AVAILABLE = True
-except ImportError:
-    FABRICATE_AVAILABLE = False
+from tonic_fabricate import generate
 
 
 class FabricateManager:
@@ -27,12 +23,6 @@ class FabricateManager:
         Args:
             workspace: Fabricate workspace to use (default: 'Default')
         """
-        if not FABRICATE_AVAILABLE:
-            raise ImportError(
-                "fabricate-client is not installed. "
-                "Install it with: pip install fabricate-client"
-            )
-        
         self.workspace = workspace
         self._temp_db_path: Optional[str] = None
     
@@ -47,8 +37,8 @@ class FabricateManager:
         
         Args:
             database_name: Name of the database schema in Fabricate
-            output_dir: Directory to save the database (defaults to temp)
-            overwrite: Whether to overwrite existing files
+            output_dir: Directory to save the database (defaults to ./fabricate/<database>_<timestamp>)
+            overwrite: Whether to overwrite existing files (default: True)
             entity: Optional specific table/entity to generate
             on_progress: Optional progress callback function
             
@@ -59,14 +49,16 @@ class FabricateManager:
             Exception: If Fabricate generation fails
         """
         if output_dir is None:
-            # Use temporary directory
-            temp_dir = tempfile.mkdtemp(prefix="fabricate_db_")
-            output_path = temp_dir
-            self._temp_db_path = temp_dir
+            # Use "fabricate" directory in current working directory
+            # Create a unique subdirectory for this generation to avoid conflicts
+            import time
+            timestamp = int(time.time())
+            output_path = str(Path.cwd() / "fabricate" / f"{database_name}_{timestamp}")
+            # Don't create the directory yet - let Fabricate client handle it
+            self._temp_db_path = output_path
         else:
             output_path = str(Path(output_dir).absolute())
-            # Ensure the output directory exists
-            Path(output_path).mkdir(parents=True, exist_ok=True)
+            # Don't create the directory yet - let Fabricate client handle it
         
         print(f"Generating database '{database_name}' from Fabricate...")
         print(f"Workspace: {self.workspace}")
@@ -74,13 +66,6 @@ class FabricateManager:
         
         try:
             # Generate SQLite database using Fabricate (always use sqlite format)
-            print(f"📡 Calling Fabricate with parameters:")
-            print(f"   - workspace: {self.workspace}")
-            print(f"   - database: {database_name}")
-            print(f"   - format: sqlite")
-            print(f"   - dest: {output_path}")
-            print(f"   - entity: {entity}")
-            
             generate(
                 workspace=self.workspace,
                 database=database_name,
@@ -88,53 +73,14 @@ class FabricateManager:
                 dest=str(output_path),  # Ensure dest is a string, not Path object
                 overwrite=overwrite,
                 entity=entity,
-                unzip=True,  # Explicitly set unzip to True for directory dest
                 on_progress=on_progress or self._default_progress_callback
             )
             
-            # Find the generated SQLite file
-            db_file_path = self._find_sqlite_file(output_path, database_name)
+            return output_path
             
-            print(f"✅ Database generated successfully: {db_file_path}")
-            return db_file_path
-            
-        except AttributeError as e:
-            if "'NoneType' object has no attribute 'lower'" in str(e):
-                print(f"❌ Fabricate API Error: Received unexpected response format.")
-                print(f"   This usually indicates:")
-                print(f"   - Authentication failure (check API key)")
-                print(f"   - Workspace '{self.workspace}' doesn't exist")
-                print(f"   - Database '{database_name}' doesn't exist in workspace")
-                print(f"   - API connectivity issues")
-                print(f"   Original error: {e}")
-            else:
-                print(f"❌ Attribute error: {e}")
-            raise
         except Exception as e:
             print(f"❌ Failed to generate database: {e}")
-            print(f"   Error type: {type(e).__name__}")
             raise
-    
-    def _find_sqlite_file(self, output_dir: str, database_name: str) -> str:
-        """Find the generated SQLite file in the output directory"""
-        output_path = Path(output_dir)
-        
-        # Look for files with common SQLite extensions
-        sqlite_extensions = ['.sqlite', '.sqlite3', '.db']
-        
-        for ext in sqlite_extensions:
-            potential_file = output_path / f"{database_name}{ext}"
-            if potential_file.exists():
-                return str(potential_file)
-        
-        # If not found with exact name, look for any SQLite file
-        for ext in sqlite_extensions:
-            for file_path in output_path.glob(f"*{ext}"):
-                return str(file_path)
-        
-        raise FileNotFoundError(
-            f"No SQLite file found in {output_dir} after Fabricate generation"
-        )
     
     def _default_progress_callback(self, data: Dict[str, Any]):
         """Default progress callback with simple progress display"""
@@ -147,14 +93,19 @@ class FabricateManager:
         print(f"  {phase_text}{percent}% complete{status_text}...")
     
     def cleanup_temp_database(self):
-        """Clean up temporary database files if they were created"""
+        """Clean up database files if they were created in default location"""
         if self._temp_db_path and os.path.exists(self._temp_db_path):
             import shutil
             try:
-                shutil.rmtree(self._temp_db_path)
-                print(f"🧹 Cleaned up temporary database: {self._temp_db_path}")
+                path = Path(self._temp_db_path)
+                if path.is_file():
+                    path.unlink()
+                    print(f"🧹 Cleaned up database file: {self._temp_db_path}")
+                elif path.is_dir():
+                    shutil.rmtree(self._temp_db_path)
+                    print(f"🧹 Cleaned up database directory: {self._temp_db_path}")
             except Exception as e:
-                print(f"Warning: Failed to clean up temporary database: {e}")
+                print(f"Warning: Failed to clean up database: {e}")
             finally:
                 self._temp_db_path = None
     
@@ -191,11 +142,11 @@ def create_progress_callback(verbose: bool = True) -> Callable:
         
         # Use different icons based on phase
         icon = "🔄"
-        if "complete" in phase.lower():
+        if phase and "complete" in phase.lower():
             icon = "✅"
-        elif "error" in phase.lower() or "fail" in phase.lower():
+        elif phase and ("error" in phase.lower() or "fail" in phase.lower()):
             icon = "❌"
-        elif "download" in phase.lower():
+        elif phase and "download" in phase.lower():
             icon = "⬇️"
         
         print(f"  {icon} {phase_display}: {percent}%{status_display}")
