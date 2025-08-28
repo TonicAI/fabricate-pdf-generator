@@ -32,16 +32,14 @@ pip install -r requirements.txt
 export FABRICATE_API_KEY="your-api-key-here"
 ```
 
-2. **Generate your first PDFs**:
+2. **Create your Fabricate Fatabase**:
+
+Sign into [Fabricate](https://fabricate.tonic.ai) and create a new database and table. Add columns for the data that you want to be included in the generated PDFs. You can control the file size and file names by adding columns called `file_size` and `file_name`. See the [Fabricate Configuration](#fabricate-configuration) section for more details.
+
+3. **Generate your PDFs**:
 
 ```bash
-python main.py --workspace Default --database ecommerce --table customers --output ./my_pdfs
-```
-
-3. **Check the results**:
-
-```bash
-ls -la ./my_pdfs/
+python main.py --workspace my_workspace --database my_database --table my_table --output ./pdfs
 ```
 
 ## Usage
@@ -49,11 +47,12 @@ ls -la ./my_pdfs/
 ### Basic Usage
 
 ```bash
-# Generate PDFs from Fabricate database
 python main.py --workspace Default --database ecommerce --table customers --output ./output_pdfs
 ```
 
 ### With Image Conversion (Simulated Scans)
+
+The following command will generate PDFs with embedded images that simulate scanned documents:
 
 ```bash
 python main.py --workspace Default --database ecommerce --table customers --output ./output_pdfs --image
@@ -61,21 +60,10 @@ python main.py --workspace Default --database ecommerce --table customers --outp
 
 ### With Custom Title
 
+The following command will generate PDFs with a custom title:
+
 ```bash
 python main.py --workspace Default --database ecommerce --table customers --output ./output_pdfs --title "Customer Registration Form"
-```
-
-### Advanced Examples
-
-```bash
-# Custom workspace with specific entity
-python main.py --workspace MyWorkspace --database ecommerce --table orders --output ./output_pdfs --entity Orders
-
-# Keep the generated database for reuse
-python main.py -w Default -d ecommerce -t customers -o ./output_pdfs --keep-database --database-output-dir ./databases
-
-# Generate image-based PDFs with custom settings
-python main.py -w Default -d ecommerce -t products -o ./output_pdfs --image --title "Product Catalog"
 ```
 
 ## CLI Options
@@ -123,29 +111,9 @@ Set these environment variables before running the application:
   - Falls back to `{row_index}.pdf`
   - Automatically sanitizes filenames for filesystem compatibility
 
-## Database Integration
+## Fabricate Configuration
 
-### Supported Structures
-
-The application works with **any SQLite table structure**. Data is automatically formatted into professional forms regardless of the table schema.
-
-### Example Database Structure
-
-```sql
-CREATE TABLE customers (
-    id INTEGER PRIMARY KEY,
-    first_name TEXT,
-    last_name TEXT,
-    email TEXT,
-    phone TEXT,
-    address TEXT,
-    city TEXT,
-    state TEXT,
-    zip_code TEXT,
-    file_size INTEGER,        -- Special: Controls PDF file size in KB
-    file_name TEXT           -- Special: Custom filename for PDF
-);
-```
+The generator uses Fabricate to dynamically generate data for the PDF files. Create a Fabricate database and add a table with any columns you want to include in the PDF.
 
 ### Special Control Columns
 
@@ -157,19 +125,6 @@ The generator recognizes special columns that control PDF generation behavior:
 | `file_name` | TEXT    | Custom PDF filename    | Auto-sanitized for filesystem safety; must end with `.pdf`     |
 
 **Important**: Special columns are excluded from PDF content - they control generation only.
-
-### Sample Data
-
-```sql
-INSERT INTO customers VALUES (
-    1, 'John', 'Doe', 'john.doe@email.com', '555-1234',
-    '123 Main St', 'Anytown', 'CA', '12345',
-    150,                     -- Generate 150KB PDF
-    'customer_john_doe.pdf'  -- Custom filename
-);
-```
-
-This will generate a PDF named `customer_john_doe.pdf` with a target size of 150KB containing a form with all the customer data (excluding the control columns).
 
 ## Project Structure
 
@@ -188,25 +143,3 @@ pdf-generator/
     ├── database.py        # Database operations and connectivity
     └── fabricate.py       # Fabricate integration for dynamic database generation
 ```
-
-### Architecture
-
-The codebase follows a clean, modular architecture with clear separation of concerns:
-
-| Component            | Purpose               | Key Features                                               |
-| -------------------- | --------------------- | ---------------------------------------------------------- |
-| **PDFGenerator**     | Main orchestrator     | Coordinates all components, manages workflow               |
-| **FabricateManager** | Fabricate integration | API calls, database generation, cleanup                    |
-| **DatabaseManager**  | SQLite operations     | Query execution, table validation, column detection        |
-| **StyleManager**     | PDF styling           | Custom paragraph styles, layout configuration              |
-| **ContentGenerator** | Form layout           | Content creation, padding for file size inflation          |
-| **ImageGenerator**   | Image processing      | PIL image generation, PDF embedding for scanned simulation |
-| **FileSizeInflator** | File size control     | Binary padding, size target validation                     |
-
-### Design Principles
-
-- **Single Responsibility**: Each class has a focused, well-defined purpose
-- **Dependency Injection**: Components receive their dependencies, enabling easy testing
-- **Error Handling**: Comprehensive exception handling with clear error messages
-- **Resource Management**: Proper cleanup of temporary files and database connections
-- **Configuration**: Environment-based configuration for Fabricate integration
