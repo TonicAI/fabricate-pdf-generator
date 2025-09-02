@@ -29,7 +29,7 @@ pip install -r requirements.txt
 1. **Set up Fabricate credentials**:
 
 ```bash
-export FABRICATE_API_KEY="your-api-key-here"
+export FABRICATE_API_KEY="your-api-key-here" # On Windows: $env:FABRICATE_API_KEY = "your-api-key-here"
 ```
 
 2. **Create your Fabricate Fatabase**:
